@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import TechLoadingScreen from "./components/TechLoadingScreen";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Coming Soon...",
-  description: "Website Coming Soon",
+  title: "ILKOMERZ 62 | Coming Soon",
+  description: "Website Resmi Angkatan 62 Ilmu Komputer",
 };
 
 export default function RootLayout({
@@ -28,6 +29,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="h-full h-dvh w-full overflow-hidden bg-black text-white antialiased flex flex-col">
+        <TechLoadingScreen />
         {children}
       </body>
     </html>
