@@ -66,56 +66,35 @@ export default function TechLoadingScreen() {
   const [progress, setProgress] = useState(0);
   const [isExiting, setIsExiting] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
   const [activeLogs, setActiveLogs] = useState<LogMessage[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-
-  const playTechBeep = useCallback((freq = 880, type: OscillatorType = "sine", duration = 0.04) => {
-    if (!soundEnabled) return;
-    try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === "suspended") {
-        ctx.resume();
-      }
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(0.04, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start();
-      osc.stop(ctx.currentTime + duration);
-    } catch {
-    }
-  }, [soundEnabled]);
+  const completedRef = useRef(false);
+  const shownLogCountRef = useRef(0);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleComplete = useCallback(() => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
     setIsExiting(true);
-    playTechBeep(1200, "triangle", 0.15);
-    setTimeout(() => {
+    finishTimerRef.current = setTimeout(() => {
       setIsFinished(true);
-    }, 600);
-  }, [playTechBeep]);
+    }, 750);
+  }, []);
 
   const handleSkip = useCallback(() => {
+    if (completedRef.current) return;
     setProgress(100);
     setActiveLogs(BOOT_LOGS);
     handleComplete();
   }, [handleComplete]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === " " || e.key === "Escape" || e.key === "Enter") {
-        e.preventDefault();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === " " || event.key === "Escape" || event.key === "Enter") {
+        event.preventDefault();
         handleSkip();
       }
     };
@@ -124,33 +103,36 @@ export default function TechLoadingScreen() {
   }, [handleSkip]);
 
   useEffect(() => {
-    const startTime = Date.now();
-    const duration = 2400; 
-
-    const timer = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const currentPct = Math.min(100, Math.floor((elapsed / duration) * 100));
+    const startTime = performance.now();
+    const duration = 4400;
+    progressTimerRef.current = setInterval(() => {
+      if (completedRef.current) return;
+      const currentPct = Math.min(100, Math.floor(((performance.now() - startTime) / duration) * 100));
       setProgress(currentPct);
 
-      const eligibleLogs = BOOT_LOGS.filter((l) => l.threshold <= currentPct);
-      setActiveLogs((prev) => {
-        if (prev.length !== eligibleLogs.length) {
-          playTechBeep(600 + eligibleLogs.length * 90, "square", 0.03);
-          return eligibleLogs;
-        }
-        return prev;
-      });
+      const eligibleLogs = BOOT_LOGS.filter((log) => log.threshold <= currentPct);
+      if (eligibleLogs.length !== shownLogCountRef.current) {
+        shownLogCountRef.current = eligibleLogs.length;
+        setActiveLogs(eligibleLogs);
+      }
 
       if (currentPct >= 100) {
-        clearInterval(timer);
-        setTimeout(() => {
-          handleComplete();
-        }, 300);
+        if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+        completionTimerRef.current = setTimeout(handleComplete, 300);
       }
     }, 28);
 
-    return () => clearInterval(timer);
-  }, [handleComplete, playTechBeep]);
+    return () => {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
+    };
+  }, [handleComplete]);
+
+  useEffect(() => {
+    return () => {
+      if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -247,7 +229,7 @@ export default function TechLoadingScreen() {
         }}
       />
 
-      <div className="relative z-20 w-full max-w-2xl mx-4 px-3 sm:px-0">
+      <div className="relative z-20 w-full max-w-2xl px-4 sm:px-0">
         <div className="rounded-xl border border-emerald-500/30 bg-zinc-950/85 backdrop-blur-xl shadow-[0_0_50px_rgba(16,185,129,0.15)] overflow-hidden">
           
           <div className="flex items-center justify-start border-b border-zinc-800/80 bg-zinc-900/90 px-4 py-2.5">
@@ -265,11 +247,11 @@ export default function TechLoadingScreen() {
             
             <div className="flex flex-col items-center justify-center text-center pt-1 pb-2">
               <pre className="text-[10px] sm:text-xs leading-none font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.4)] select-none">
-{` ___ _     _  _____  __  __ _____ ____  ____  
-|_ _| |   | |/ / _ \\|  \\/  | ____|  _ \\|___ \\ 
- | || |   | ' / | | | |\\/| |  _| | |_) | __) |
- | || |___| . \\ |_| | |  | | |___|  _ < / __/ 
-|___|_____|_|\\_\\___/|_|  |_|_____|_| \\_\\_____|`}
+{` ____ _____  _    ______     _____ _____ ____  
+/ ___|_   _|/ \\  |  _ \\ \\   / /_ _| ____/ ___| 
+\\___ \\ | | / _ \\ | |_) \\ \\ / / | ||  _| \\___ \\ 
+ ___) || |/ ___ \\|  _ < \\ V /  | || |___ ___) |
+|____/ |_/_/   \\_\\_| \\_\\ \\_/  |___|_____|____/`}
               </pre>
               <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 text-xs sm:text-sm font-semibold tracking-wide">
                 <span className="text-emerald-400">ILMU KOMPUTER</span>
@@ -323,7 +305,7 @@ export default function TechLoadingScreen() {
               </div>
             </div>
 
-            <div className="space-y-1.5 pt-1">
+            <div className="space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <span className="text-zinc-400">BOOT PROGRESS:</span>
@@ -343,13 +325,6 @@ export default function TechLoadingScreen() {
                 />
               </div>
             </div>
-
-            <div className="flex items-center justify-start pt-1 text-[11px] text-zinc-500">
-              <div className="flex items-center gap-1.5">
-                <span>ILKOMERZ 62 • CS IPB</span>
-              </div>
-            </div>
-
           </div>
         </div>
       </div>
